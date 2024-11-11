@@ -2,47 +2,44 @@ import logging
 import requests
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, Filters
+import os
 
-# Set up logging
+# Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Telegram Bot Token and ProfitDrive API Key
+# Set up Telegram bot token and ProfitDrive API key
 TELEGRAM_BOT_TOKEN = '7820729855:AAG_ph7Skh4SqGxIWYYcRNigQqCKdnVW354'
 PROFITDRIVE_API_KEY = '469|L92XQ8B7ZgaEePJEdQV24p8IPLWyhp15xHVTYT69'
-PROFITDRIVE_UPLOAD_URL = 'https://pd.heracle.net/uploads'  # Replace with actual API endpoint
+PROFITDRIVE_UPLOAD_URL = 'https://pd.heracle.net/uploads'  # ProfitDrive upload endpoint
 
 def start(update: Update, context: CallbackContext):
     """Send a welcome message when the /start command is issued."""
     update.message.reply_text("Hello! Send me a file, and I'll upload it to ProfitDrive.")
 
 def handle_document(update: Update, context: CallbackContext):
-    """Handle document uploads from the user with simple download/upload."""
-    logger.info("handle_document function triggered")
+    """Handle document uploads from the user."""
     file = update.message.document
     if file:
+        update.message.reply_text("File received! Downloading and uploading to ProfitDrive...")
+
+        # Get the file download URL from Telegram
+        file_info = context.bot.get_file(file.file_id)
+        download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_info.file_path}"
+        
         try:
-            # Confirm that the bot received the document
-            update.message.reply_text("File received! Preparing to upload...")
-
-            # Get file download URL
-            file_info = context.bot.get_file(file.file_id)
-            download_url = file_info.file_path
-            download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{download_url}"
-            logger.info(f"Download URL: {download_url}")
-
-            # Download the file locally
-            local_file_path = f"/tmp/{file.file_name}"
+            # Download the file
             file_response = requests.get(download_url)
+            file_response.raise_for_status()
+            
+            # Save the file locally
+            local_file_path = f"/tmp/{file.file_name}"
             with open(local_file_path, "wb") as f:
                 f.write(file_response.content)
-            logger.info(f"File downloaded locally to {local_file_path}")
-
-            # Inform the user that the bot is uploading the file
-            update.message.reply_text("Uploading your file to ProfitDrive, please wait...")
+            logger.info(f"Downloaded file to {local_file_path}")
 
             # Upload the file to ProfitDrive
             with open(local_file_path, 'rb') as f:
@@ -52,19 +49,23 @@ def handle_document(update: Update, context: CallbackContext):
                     files={"file": f},
                     data={"parentId": "null", "relativePath": file.file_name}
                 )
-            logger.info(f"ProfitDrive response: {response.status_code} - {response.text}")
 
-            # Handle the response from ProfitDrive
+            # Check the ProfitDrive response
             if response.status_code == 201:
-                update.message.reply_text("File uploaded successfully!")
+                upload_data = response.json()
+                file_url = upload_data['fileEntry']['url']
+                update.message.reply_text(f"File uploaded successfully! Access it at: {file_url}")
             else:
                 update.message.reply_text(f"Failed to upload. Status code: {response.status_code}, Message: {response.text}")
-
+            
+            # Clean up local file
+            os.remove(local_file_path)
+        
         except Exception as e:
             logger.error(f"Error during file handling: {e}")
             update.message.reply_text("An error occurred while processing your file.")
     else:
-        update.message.reply_text("No document detected. Please send a valid file.")
+        update.message.reply_text("Please send a valid file.")
 
 def main():
     """Start the bot using polling."""
@@ -73,9 +74,7 @@ def main():
 
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.document, handle_document))
-    dp.add_error_handler(lambda update, context: logger.warning(f"Error: {context.error}"))
 
-    # Start polling
     updater.start_polling()
     updater.idle()
 
