@@ -104,7 +104,7 @@ def main():
     dp.add_error_handler(error)
 
     # Set the webhook
-    webhook_url = f"https://profitdrive-uploader.onrender.com/{TELEGRAM_BOT_TOKEN}"
+    webhook_url = f"https://profitdrive-uploader.onrender.com/7820729855:AAG_ph7Skh4SqGxIWYYcRNigQqCKdnVW354"
     bot.set_webhook(webhook_url)
     logger.info(f"Webhook set to {webhook_url}")
 
