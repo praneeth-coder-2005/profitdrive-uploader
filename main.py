@@ -1,8 +1,10 @@
 import os
 import logging
 import requests
+from flask import Flask, request
 from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, Filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext
+from telegram.ext.filters import Document
 
 # Set up logging for better debugging
 logging.basicConfig(
@@ -12,9 +14,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Environment variables for security
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-PROFITDRIVE_API_KEY = os.getenv('PROFITDRIVE_API_KEY')
+TELEGRAM_BOT_TOKEN = '7820729855:AAG_ph7Skh4SqGxIWYYcRNigQqCKdnVW354'
+PROFITDRIVE_API_KEY = '469|L92XQ8B7ZgaEePJEdQV24p8IPLWyhp15xHVTYT69'
 PROFITDRIVE_UPLOAD_URL = 'https://pd.heracle.net/uploads'  # Replace with actual API endpoint
+
+# Flask app setup for webhook handling
+app = Flask(__name__)
+
+@app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
+def webhook_handler():
+    update = Update.de_json(request.get_json(), bot)
+    bot_app.update_queue.put(update)
+    return "ok", 200
 
 def start(update: Update, context: CallbackContext):
     """Send a welcome message when the /start command is issued."""
@@ -68,22 +79,22 @@ def error(update: Update, context: CallbackContext):
 
 def main():
     """Start the bot."""
-    # Create the Updater and pass it your bot's token.
-    updater = Updater(TELEGRAM_BOT_TOKEN)
-    dp = updater.dispatcher
+    global bot, bot_app
+    bot_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    bot = bot_app.bot
 
-    # Add handlers for commands and messages
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document, handle_document))
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(MessageHandler(Document.ALL, handle_document))
+    bot_app.add_error_handler(error)
 
-    # Log all errors
-    dp.add_error_handler(error)
+    # Set the webhook
+    webhook_url = f"https://profitdrive-uploader.onrender.com/{TELEGRAM_BOT_TOKEN}"
+    bot.setWebhook(webhook_url)
+    logger.info(f"Webhook set to {webhook_url}")
 
-    # Start the Bot
-    updater.start_polling()
-    logger.info("Bot started polling")
-    updater.idle()
+    # Run the Flask app
+    app.run(host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
     main()
-                         
+            
