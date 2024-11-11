@@ -24,6 +24,7 @@ app = Flask(__name__)
 def webhook_handler():
     """Handle incoming updates from Telegram"""
     update = Update.de_json(request.get_json(), bot)
+    print("Incoming request:", request.get_json())  # Debugging log
     dp.process_update(update)
     return "ok", 200
 
@@ -47,15 +48,24 @@ def handle_document(update: Update, context: CallbackContext):
             download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_url}"
             logger.info(f"Download URL: {download_url}")
             
+            # Download the file locally
+            local_file_path = f"/tmp/{file.file_name}"
+            response = requests.get(download_url)
+            with open(local_file_path, "wb") as f:
+                f.write(response.content)
+            logger.info(f"File downloaded locally to {local_file_path}")
+
             # Inform the user that the bot is uploading the file
             update.message.reply_text("Uploading your file to ProfitDrive, please wait...")
 
-            # Upload the file directly from the download URL to ProfitDrive
-            response = requests.post(
-                PROFITDRIVE_UPLOAD_URL,
-                headers={"Authorization": f"Bearer {PROFITDRIVE_API_KEY}"},
-                data={"url": download_url, "parentId": "null", "relativePath": file.file_name}
-            )
+            # Upload the file to ProfitDrive
+            with open(local_file_path, 'rb') as f:
+                response = requests.post(
+                    PROFITDRIVE_UPLOAD_URL,
+                    headers={"Authorization": f"Bearer {PROFITDRIVE_API_KEY}"},
+                    files={"file": f},
+                    data={"parentId": "null", "relativePath": file.file_name}
+                )
             
             # Log the response for debugging
             logger.info(f"ProfitDrive response: {response.status_code} - {response.text}")
@@ -66,6 +76,10 @@ def handle_document(update: Update, context: CallbackContext):
             else:
                 logger.error(f"Upload failed. Status code: {response.status_code}, Message: {response.text}")
                 update.message.reply_text(f"Failed to upload. Status code: {response.status_code}, Message: {response.text}")
+
+            # Clean up the local file
+            os.remove(local_file_path)
+            logger.info("Local file removed after upload")
 
         except Exception as e:
             logger.error(f"Error during file handling: {e}")
