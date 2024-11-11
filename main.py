@@ -3,8 +3,7 @@ import logging
 import requests
 from flask import Flask, request
 from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext
-from telegram.ext.filters import Document
+from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, Filters
 
 # Set up logging for better debugging
 logging.basicConfig(
@@ -24,7 +23,7 @@ app = Flask(__name__)
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def webhook_handler():
     update = Update.de_json(request.get_json(), bot)
-    bot_app.update_queue.put(update)
+    dp.process_update(update)
     return "ok", 200
 
 def start(update: Update, context: CallbackContext):
@@ -79,17 +78,18 @@ def error(update: Update, context: CallbackContext):
 
 def main():
     """Start the bot."""
-    global bot, bot_app
-    bot_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    bot = bot_app.bot
+    global bot, dp
+    updater = Updater(TELEGRAM_BOT_TOKEN)
+    dp = updater.dispatcher
+    bot = updater.bot
 
-    bot_app.add_handler(CommandHandler("start", start))
-    bot_app.add_handler(MessageHandler(Document.ALL, handle_document))
-    bot_app.add_error_handler(error)
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.document, handle_document))
+    dp.add_error_handler(error)
 
     # Set the webhook
     webhook_url = f"https://profitdrive-uploader.onrender.com/{TELEGRAM_BOT_TOKEN}"
-    bot.setWebhook(webhook_url)
+    bot.set_webhook(webhook_url)
     logger.info(f"Webhook set to {webhook_url}")
 
     # Run the Flask app
@@ -97,4 +97,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
