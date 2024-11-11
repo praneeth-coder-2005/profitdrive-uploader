@@ -22,6 +22,7 @@ app = Flask(__name__)
 
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def webhook_handler():
+    print("Incoming request:", request.get_json())  # Debugging log
     update = Update.de_json(request.get_json(), bot)
     dp.process_update(update)
     return "ok", 200
@@ -32,14 +33,16 @@ def start(update: Update, context: CallbackContext):
 
 def handle_document(update: Update, context: CallbackContext):
     """Handle document uploads from the user."""
-    logger.info("handle_document function triggered")
+    print("handle_document function triggered")  # Debugging log
+    update.message.reply_text("Processing your document...")
+
     file = update.message.document
     if file:
-        logger.info(f"Received document: {file.file_name}")
+        print(f"Received document: {file.file_name}")  # Debugging log
         try:
             # Download the file to a local temporary directory
             file_path = file.get_file().download()
-            logger.info(f"File downloaded to: {file_path}")
+            print(f"File downloaded to: {file_path}")  # Debugging log
             update.message.reply_text("Uploading your file to ProfitDrive...")
 
             # Upload the file to ProfitDrive
@@ -50,9 +53,7 @@ def handle_document(update: Update, context: CallbackContext):
                     files={"file": f},
                     data={"parentId": "null", "relativePath": file.file_name}
                 )
-
-            # Log the response for debugging
-            logger.info(f"ProfitDrive response: {response.status_code}, {response.text}")
+            print(f"Upload response: {response.status_code} - {response.text}")  # Debugging log
 
             # Handle the response from ProfitDrive
             if response.status_code == 201:
@@ -63,7 +64,7 @@ def handle_document(update: Update, context: CallbackContext):
 
             # Remove the local file after upload
             os.remove(file_path)
-            logger.info("File removed after upload")
+            print("File removed after upload")  # Debugging log
 
         except Exception as e:
             logger.error(f"Error during file handling: {e}")
@@ -97,4 +98,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-                
