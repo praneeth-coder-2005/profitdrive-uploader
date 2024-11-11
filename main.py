@@ -32,13 +32,14 @@ def start(update: Update, context: CallbackContext):
     update.message.reply_text("Hello! Send me a file, and I'll upload it to ProfitDrive.")
 
 def handle_document(update: Update, context: CallbackContext):
-    """Handle document uploads from the user."""
+    """Handle document uploads from the user with progress messages."""
     logger.info("handle_document function triggered")
-
     file = update.message.document
-    if file:
-        logger.info(f"Received document: {file.file_name}")
 
+    # Confirm that the bot received the document
+    update.message.reply_text("File received! Preparing to upload...")
+
+    if file:
         try:
             # Get the file download URL from Telegram
             file_info = bot.get_file(file.file_id)
@@ -46,7 +47,8 @@ def handle_document(update: Update, context: CallbackContext):
             download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_url}"
             logger.info(f"Download URL: {download_url}")
             
-            update.message.reply_text("Uploading your file to ProfitDrive...")
+            # Inform the user that the bot is uploading the file
+            update.message.reply_text("Uploading your file to ProfitDrive, please wait...")
 
             # Upload the file directly from the download URL to ProfitDrive
             response = requests.post(
@@ -67,10 +69,10 @@ def handle_document(update: Update, context: CallbackContext):
 
         except Exception as e:
             logger.error(f"Error during file handling: {e}")
-            update.message.reply_text("An error occurred while processing your file.")
+            update.message.reply_text("An error occurred while processing your file. Please try again.")
     else:
         logger.warning("No document detected")
-        update.message.reply_text("No document detected.")
+        update.message.reply_text("No document detected. Please send a valid file.")
 
 def error(update: Update, context: CallbackContext):
     """Log errors caused by Updates."""
