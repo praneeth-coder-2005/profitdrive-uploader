@@ -5,14 +5,14 @@ from flask import Flask, request
 from telegram import Update, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, Filters
 
-# Set up logging for better debugging
+# Set up logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Environment variables for security
+# Telegram Bot Token and ProfitDrive API Key
 TELEGRAM_BOT_TOKEN = '7820729855:AAG_ph7Skh4SqGxIWYYcRNigQqCKdnVW354'
 PROFITDRIVE_API_KEY = '469|L92XQ8B7ZgaEePJEdQV24p8IPLWyhp15xHVTYT69'
 PROFITDRIVE_UPLOAD_URL = 'https://pd.heracle.net/uploads'  # Replace with actual API endpoint
@@ -22,38 +22,41 @@ app = Flask(__name__)
 
 @app.route(f'/{TELEGRAM_BOT_TOKEN}', methods=['POST'])
 def webhook_handler():
-    print("Incoming request:", request.get_json())  # Debugging log
+    """Handle incoming updates from Telegram"""
     update = Update.de_json(request.get_json(), bot)
     dp.process_update(update)
     return "ok", 200
 
 def start(update: Update, context: CallbackContext):
     """Send a welcome message when the /start command is issued."""
-    update.message.reply_text("Hello! Send me a file and I'll upload it to ProfitDrive.")
+    update.message.reply_text("Hello! Send me a file, and I'll upload it to ProfitDrive.")
 
 def handle_document(update: Update, context: CallbackContext):
     """Handle document uploads from the user."""
-    print("handle_document function triggered")  # Debugging log
-    update.message.reply_text("Processing your document...")
+    logger.info("handle_document function triggered")
 
     file = update.message.document
     if file:
-        print(f"Received document: {file.file_name}")  # Debugging log
+        logger.info(f"Received document: {file.file_name}")
+
         try:
-            # Download the file to a local temporary directory
-            file_path = file.get_file().download()
-            print(f"File downloaded to: {file_path}")  # Debugging log
+            # Get the file download URL from Telegram
+            file_info = bot.get_file(file.file_id)
+            file_url = file_info.file_path
+            download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_url}"
+            logger.info(f"Download URL: {download_url}")
+            
             update.message.reply_text("Uploading your file to ProfitDrive...")
 
-            # Upload the file to ProfitDrive
-            with open(file_path, 'rb') as f:
-                response = requests.post(
-                    PROFITDRIVE_UPLOAD_URL,
-                    headers={"Authorization": f"Bearer {PROFITDRIVE_API_KEY}"},
-                    files={"file": f},
-                    data={"parentId": "null", "relativePath": file.file_name}
-                )
-            print(f"Upload response: {response.status_code} - {response.text}")  # Debugging log
+            # Upload the file directly from the download URL to ProfitDrive
+            response = requests.post(
+                PROFITDRIVE_UPLOAD_URL,
+                headers={"Authorization": f"Bearer {PROFITDRIVE_API_KEY}"},
+                data={"url": download_url, "parentId": "null", "relativePath": file.file_name}
+            )
+            
+            # Log the response for debugging
+            logger.info(f"ProfitDrive response: {response.status_code} - {response.text}")
 
             # Handle the response from ProfitDrive
             if response.status_code == 201:
@@ -61,10 +64,6 @@ def handle_document(update: Update, context: CallbackContext):
             else:
                 logger.error(f"Upload failed. Status code: {response.status_code}, Message: {response.text}")
                 update.message.reply_text(f"Failed to upload. Status code: {response.status_code}, Message: {response.text}")
-
-            # Remove the local file after upload
-            os.remove(file_path)
-            print("File removed after upload")  # Debugging log
 
         except Exception as e:
             logger.error(f"Error during file handling: {e}")
